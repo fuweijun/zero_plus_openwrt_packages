@@ -1,0 +1,490 @@
+<%+header%>
+<form id="form1" method="post" name="form1">
+<div class="lj-wluo">
+	
+	<div id="loading_init" style="padding:20px;text-align:center;display:none;">
+		<img height="15" width="15" src="<%=resource%>/ap03s/images/loading.gif" /><span id="info">正在扫描网络，请稍后...</span>
+	</div>
+   <div class="lj-wluo-top" id="scan_network_box">选择您需要连接的路由器<span><button type="Button" id="ssid_reflash" class="sm-lyq">扫描路由器</button></span></div>
+
+  <div class="lj-wluo-cont">
+		<div id="department">
+			<div id="selectTop" class="selectTop"></div>
+			<ul id="selectDown" style="display: none;">
+			</ul>
+		</div>
+		<input type="hidden" name="ssid" value="">
+		<input type="hidden" name="channel" value="">
+		<input type="hidden" name="bssid" value="">
+		<input type="hidden" name="encryption" value="">
+
+		<input type="password" autocomplete="off" id="input_password" name="key" class="ys-mima" />
+  </div>
+
+	<div class="foot-lj">
+		<a id="show_password_btn"><img src="<%=resource%>/ap03s/images/gou2.png" class="gou-img" /> <span class="span-xsm1">隐藏密码</span></a>
+		<span class="span-xsm2" id="at_xihao"><img src="<%=resource%>/ap03s/images/xihao.png" id="connected_img"/><span id="status_box">获取中...</span></span>
+	</div>
+
+	<div class="kssj-btn">
+	  <div id="noti_box" class="succssbox" style="color:red"></div>
+	  <button type="Button" name="Submit" id="submit_btn" class="kssj-btn-foot">连接网络</button>
+	</div>
+	
+	<div class="kssj-btn">
+	  <button type="Button" name="Submit2" id="submit_del_btn" class="kssj-btn-foot">断开网络</button>
+	</div>
+</div>
+</form>
+
+<br>
+<br>
+<script type="text/javascript">
+var local_ssid = "";
+var count = 0;
+var small_img = '<div class="selectTop_img" ><img src="<%=resource%>/ap03s/images/sanjiao.png" width="17" height="11"></div>';
+$(function(){
+	var display = '<%=resource%>/ap03s/images/gou.png';
+	var nodis = '<%=resource%>/ap03s/images/gou2.png';
+	
+	$("#top_link").attr("href", "<%=luci.dispatcher.build_url('zeroplus', 'main', 'main')%>");
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("zeroplus", "mode", "get_bridge")%>",request_date,function(rsp) 
+	{
+		if(rsp.status == 1){
+			set_input_val(rsp.ssid,rsp.key,rsp.encryption,rsp.channel,rsp.bssid);
+			$("#selectTop").html(rsp.ssid + small_img);
+		}
+		if(rsp.is_connect == 1){
+			$("#submit_del_btn").show();
+			$("#status_box").html("网络已连接");
+			$("#connected_img").attr('src', "<%=resource%>/ap03s/images/xihao.png");
+		} else {
+			$("#status_box").html("网络未连接");
+			$("#connected_img").attr('src', "<%=resource%>/ap03s/images/xihao1.png");
+			$("#submit_del_btn").hide();
+			scan_network();
+
+		}
+		get_local_ssid();
+	});
+	
+	$("#show_password_btn").click(function(){
+		if($('.gou-img').attr('src') == nodis){
+			$('.gou-img').attr('src',display);
+			$("#input_password").attr("type", "text");
+		}else{
+			$('.gou-img').attr('src',nodis);
+			$("#input_password").attr("type", "password");
+		}
+	});
+	
+	$(document).ready(function(e) {
+		var aUl=$('#selectDown');
+		$('#selectTop').bind("click", function(ev){
+			var ev = ev || window.event;
+			if(aUl.css("display") == 'none'){
+				aUl.show();
+			}
+			else{
+				aUl.css("display","none");
+			}
+			ev.stopPropagation();
+		});
+		
+		$(document).bind("click", function(){
+			aUl.css("display","none");
+		})
+		
+	});
+	// 删除当前连接
+	$("#submit_del_btn").click(function(){
+		var msg = "正在删除连接...";
+		disable_components(msg);
+		var request_date = {}; 
+		$.ajax({
+		  url: "<%=luci.dispatcher.build_url("zeroplus", "mode", "del_bridge")%>",
+		  dataType: 'json',
+		  timeout: 3000,
+		  type: 'POST',
+		  data: request_date,
+		  success: function(rsp,item) 
+			{
+				setTimeout("location.reload();", 2000);
+			},
+		  error: function(x, t, m)
+			{
+				check_network();
+			}
+		});
+
+	});
+	
+	
+	
+	
+	//连接网络
+	$("#submit_btn").click(function(){
+		var inpt_encryption = $("input[name='encryption']").val();
+		var inpt_ssid = $("input[name='ssid']").val();
+		
+		notis_alert("");
+		if(inpt_ssid == ""){
+			notis_alert("请选择一个可用的 无线网络。");
+			return false;
+		}
+		disable_components("正在连接路由器...");
+		var password = $("input[name='key']").val();
+
+		var request_date = $("#form1").serializeArray();
+		if (inpt_encryption == "none" && inpt_encryption == "open"){
+			request_date['key'] == ""
+		}
+
+		$.ajax({
+		  url: "<%=luci.dispatcher.build_url("zeroplus", "mode", "set_bridge")%>",
+		  cache: false,
+		  dataType: "json",
+		  timeout: 6000,
+		  type: 'POST',
+		  data: request_date,
+		  success: function(rsp,item) 
+			{
+				if(rsp.code == 0){
+					check_network();
+				} else {
+					enable_components();
+					alert("密码错误，请重新连接路由器:" + inpt_ssid + "!");
+					notis_alert(rsp.msg)
+				}
+			},
+		  error: function(x, t, m)
+			{
+				check_network();
+			}
+		});
+	});
+})
+
+	function check_network(){
+		var request_date_t = {}; 
+		$.ajax({
+		  url: "<%=luci.dispatcher.build_url("zeroplus", "mode", "get_bridge")%>",
+		  dataType: 'json',
+		  timeout: 2000,
+		  type: 'POST',
+		  data: request_date_t,
+		  success: function(rsp,item) 
+		  {
+			if(rsp.is_connect == 1){
+				enable_components();
+				set_input_val(rsp.ssid,rsp.key,rsp.encryption,rsp.channel,rsp.bssid);
+				$("#selectTop").html(rsp.ssid + small_img);
+				$("#submit_del_btn").show();
+				$("#status_box").html("网络已连接");
+				$("#connected_img").attr('src', "<%=resource%>/ap03s/images/xihao.png");
+			}
+			else
+			{
+				if(count >= 10){
+					enable_components();
+					alert("网络不稳定或者密码错误,点击确认2秒后将刷新本页！");
+					setTimeout("location.reload();", 2000);
+					return;
+				}
+				else
+				{
+					setTimeout("check_network();", 2000);
+				}
+				count++;
+			}
+		  },
+		  error: function(x, t, m)
+		  {
+			if(count >= 10)
+			{
+				enable_components();
+				message();
+				return;
+			}
+			setTimeout("check_network();", 3000);
+			count++;
+		  }
+		});
+	}
+	function get_local_ssid(){
+		var last_dev = '<%=wifi_device%>';
+		var request_date = {"device":last_dev};
+		$.getJSON("<%=luci.dispatcher.build_url("zeroplus", "mode", "view_detail")%>",request_date,function(rsp) 
+		{  
+			if(rsp.code == 0){	
+				local_ssid = rsp.ssid;
+			}
+			else
+			{
+				
+			}
+		});
+	}
+	
+	function message(){
+		alert("连接可能已断开，请重新连接WIFI:" + local_ssid + "!并刷新本页。");
+	}
+	function set_input_val(ssid,key,encryption,channel,bssid){
+		if(encryption == "none" || encryption == "open"){
+			key = "";
+			encryption = "open";
+		}
+		$("input[name='ssid']").val(ssid);  
+		$("input[name='key']").val(key);  
+		$("input[name='key_show']").val(key);
+		$("input[name='bssid']").val(bssid);  
+		$("input[name='encryption']").val(encryption);
+		if(encryption != "none" && encryption != "open"){
+			$("#input_password").show();
+			$("#input_password").val(key);
+			$("#show_password_btn").show();
+		}else{
+			$("#input_password").hide();
+		}
+		$("input[name='channel']").val(channel);
+	}
+	
+	$("#ssid_reflash").click(function(){
+		scan_network();
+	})
+	
+	function scan_network(){
+		notis_alert("");
+		disable_components("正在扫描路由器...");
+		fill_select();
+	}
+	
+	function JsonSort(json,key){
+		for(var j=1,jl=json.length;j < jl;j++){
+			var temp = json[j],
+				val  = temp[key],
+				i    = j-1;
+			while(i >=0 && json[i][key]<val){
+				json[i+1] = json[i];
+				i = i-1;    
+			}
+			json[i+1] = temp;
+		}
+		return json;
+	}
+	
+	function atsmart_add_event(){
+		var aLi=$('#selectDown').find('li');
+		for(i=0;i<aLi.length;i++){
+			aLi.eq(i).click( function(){
+				var spl_all = $(this).attr('title');
+				var arr_spl_all = spl_all.split("|");
+				var ssid = arr_spl_all[0];
+				var encryption = arr_spl_all[1];
+				var channel = arr_spl_all[2];
+				var bssid = arr_spl_all[3];
+				var key = arr_spl_all[4];
+
+				if(typeof(key) == "undefined"){
+					key = "";
+				}
+				
+				$('#selectTop').html(ssid + small_img);
+				set_input_val(ssid,key,encryption,channel,bssid);
+
+			})
+		}	
+	}
+	
+	function get_signal_url(signal){
+	
+		var signal_img;
+		if(signal < 15){
+			signal_img = "signal-0.png";
+		} else if(signal < 35)
+		{
+			signal_img = "signal-0-25.png";
+		} else if(signal < 55)
+		{
+			signal_img = "signal-25-50.png";
+		} else if(signal < 75)
+		{
+			signal_img = "signal-50-75.png";
+		}else
+		{
+			signal_img = "signal-75-100.png";
+		}
+		return '<%=resource%>/icons/' + signal_img;
+	}
+
+	function format_wifi_encryption(info){
+		if( info.wep == true ){
+			return "WEP"
+		}else if( info.wpa > 1){	
+			return "psk2"		
+		}else if( info.wpa > 0){		
+			return "psk"		
+		}else if(info.enabled){
+			return "unknown"		
+		}else{
+			return "open"		
+		}
+	}
+	
+	function fill_select(){
+		var request_date = {}; 
+		$.ajax({
+		  url: "<%=luci.dispatcher.build_url("zeroplus", "mode", "get_aplist")%>",
+		  dataType: 'json',
+		  type: 'POST',
+		  data: request_date,
+		  success: function(rsp,item) 
+			{  
+				enable_components();
+				var request_date = {}; 
+				$.getJSON("<%=luci.dispatcher.build_url("zeroplus", "mode", "get_bridge")%>",request_date,function(rsp_bridge) 
+				{ 
+					if(rsp_bridge.status == 1){
+						set_input_val(rsp_bridge.ssid,rsp_bridge.key,rsp_bridge.encryption,rsp_bridge.channel,rsp_bridge.bssid);
+					}
+					
+					if(rsp_bridge.is_connect == 1){
+						$("#status_box").html("网络已连接");
+						$("#connected_img").attr('src', "<%=resource%>/ap03s/images/xihao.png");
+						notis_alert("");
+					} else {
+						$("#status_box").html("网络未连接");
+						$("#connected_img").attr('src', "<%=resource%>/ap03s/images/xihao1.png");
+						notis_alert("请连接路由器！");
+					}
+					
+					if (rsp.code == 0){
+						var arr_aplist = rsp.aplist;
+						JsonSort(arr_aplist, "signal");
+						var inp_v;
+						var inp_rssi;
+						var inp_encryption;
+						var inp_html;
+						var tm_html;
+						var have_defult = false;
+						var signal_img;
+						
+						$(".res_op").remove();
+						if (arr_aplist.length > 0){$("#department").show();}else{$("#department").hide();}
+						
+						for(var j=0;j<arr_aplist.length;j++)
+						{
+							inp_v = arr_aplist[j]['ssid'];
+							if(typeof(inp_key) == "undefined"){
+								inp_key = "";
+							}
+							if (rsp_bridge.ssid == inp_v) {
+								have_defult = true
+							}
+						}
+						
+						$("#selectDown").html("");
+						for (var i=0;i<arr_aplist.length;i++)
+						{
+							inp_v = arr_aplist[i]['ssid'];
+							inp_rssi = arr_aplist[i]['signal'] * -1;
+							inp_channel = arr_aplist[i]['channel'];
+							inp_encryption = format_wifi_encryption(arr_aplist[i]['encryption']);
+							inp_bssid = arr_aplist[i]['bssid'];
+							inp_key = arr_aplist[i]['key'];
+							
+							if(typeof(inp_v) == "undefined" || inp_v == ""){
+								continue;
+							}
+							if(typeof(inp_key) == "undefined"){
+								inp_key = "";
+							}
+							if(inp_encryption == "none" || inp_encryption == "open"){
+								inp_key = "";
+							}
+							
+							tm_html = '';
+							if(have_defult){
+								if (rsp_bridge.ssid == inp_v) {
+									$("#selectTop").html(inp_v + small_img);
+								}
+							}else{
+								if (i == 0){
+									$("#selectTop").html(inp_v + small_img);
+									set_input_val(inp_v,inp_key,inp_encryption,inp_channel,inp_bssid);
+									if(inp_encryption != "none" && inp_encryption != "open"){
+										$("#input_password").show();
+										$("#show_password_btn").show();
+									}else{
+										$("#input_password").hide();
+										$("#show_password_btn").hide();
+									}
+								}
+							}
+							signal_img = get_signal_url(inp_rssi);
+							inp_html = '<li title="'+inp_v+'|'+inp_encryption+'|'+inp_channel+'|'+inp_bssid+'|'+inp_key+'" ><a href="javascript:void(0);">' + inp_v + '<img src="' + signal_img +'" width="16" height="14" align="right"></a></li>';
+							$("#selectDown").append(inp_html);
+						}
+						atsmart_add_event();
+					} else {
+						location.reload();
+					}
+				})
+			},
+		  error: function(x, t, m)
+			{
+				location.reload();
+			}
+		});
+	}
+  function disable_components(msg){
+	$("#submit_btn,#ssid_reflash,#submit_del_btn").attr("disabled",true);
+		$("#department").hide();
+		$("#input_password").hide();
+		$("#scan_network_box").hide();
+		$("#show_password_btn").hide();
+		$("#top_link").attr("href", false);
+		$("#at_xihao").hide();
+	
+	$("#submit_btn").removeClass("kssj-btn-foot");
+	$("#submit_btn").addClass("kssj-btn-foot-disable");
+	$("#submit_del_btn").removeClass("kssj-btn-foot");
+	$("#submit_del_btn").addClass("kssj-btn-foot-disable");
+	
+	$("#loading_init").show();
+	$("#info").html("");
+	$("#info").html(msg);
+  }
+  
+  function enable_components(){
+	$("#scan_network_box").show();
+	$("#submit_btn,#ssid_reflash,#submit_del_btn").attr("disabled",false);
+		$("#department").show();
+		var curr_encryption = $("input[name='encryption']").val();
+		if(curr_encryption != "none" && curr_encryption != "open"){
+			$("#input_password").show();
+			$("#show_password_btn").show();
+		}else{
+			$("#input_password").hide();
+			$("#show_password_btn").hide();
+		}
+		
+		$("#show_password_btn").show();
+		$("#top_link").attr("href", "<%=luci.dispatcher.build_url('zeroplus', 'main', 'main')%>");
+		$("#at_xihao").show();
+	
+	$("#submit_btn").removeClass("kssj-btn-foot-disable");
+	$("#submit_btn").addClass("kssj-btn-foot");
+	$("#submit_del_btn").removeClass("kssj-btn-foot-disable");
+	$("#submit_del_btn").addClass("kssj-btn-foot");
+	
+	$("#info").html("");
+	$("#loading_init").hide();
+  }
+	
+	function notis_alert(msg){
+		$("#noti_box").html(msg);
+	}
+</script>
+<%+footer%>

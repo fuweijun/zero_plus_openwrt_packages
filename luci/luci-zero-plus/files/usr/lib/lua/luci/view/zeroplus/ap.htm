@@ -1,0 +1,127 @@
+<%+header%>
+
+<form id="form1" method="post" name="form1">
+<div class="cbi-map" id="cbi-system">
+	<h2><a id="content" name="content">AP模式</a></h2>
+	<div class="cbi-map-descr">设置无线参数</div>
+	
+	
+<fieldset class="cbi-section">	
+	<div class="cbi-section-descr"></div>
+	<fieldset class="cbi-section-node">
+
+
+	<div class="cbi-value"><label class="cbi-value-title" for="ssid">SSID</label>
+		<div class="cbi-value-field">
+			<input type="text" class="cbi-input-text" name="ssid" id="ssid">
+			<br />
+			<div class="cbi-value-description">
+				<span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="帮助" /></span>
+					AP产生的Wi-Fi信号名称
+			</div>
+		</div>
+	</div>
+	
+	<div class="cbi-value"><label class="cbi-value-title" for="encryption">加密方式</label>
+		<div class="cbi-value-field">
+			<select class="wan_type" onchange="update_wan_type()" id="encryption" name="encryption" size="1">
+				<option id="none" value="none" selected="selected">不加密</option>
+				<option id="psk2" value="psk2">WPA/WPA2(个人版)</option>			
+			</select>
+		</div>
+	</div>
+	
+	<div class="cbi-value cbi-value-last" id="cbi-system-_pass-pw2"><label class="cbi-value-title" for="key">无线密码</label>
+		<div class="cbi-value-field">
+			<input type="password" class="cbi-input-password" name="key" id="key" value="">
+			<img src="/luci-static/resources/cbi/reload.gif" style="vertical-align:middle" title="显示/隐藏 密码" onclick="var e = document.getElementById('key'); e.type = (e.type=='password') ? 'text' : 'password';">
+		</div>
+	</div>
+	<input type="hidden" name="channel" value="6">
+	</fieldset>
+	<br>
+</fieldset>
+
+
+
+
+
+
+<div class="cbi-page-actions">
+	<input class="cbi-button cbi-button-apply" type="button" name="submit_btn" id="submit_btn" value="保存&amp;应用">
+</div>
+
+
+
+</div>
+</form>
+
+
+<script type="text/javascript">
+	$(function(){
+		get_local_ssid();
+			//连接网络
+	$("#submit_btn").click(function(){
+		var inpt_encryption = $("input[name='encryption']").val();
+		var inpt_ssid = $("input[name='ssid']").val();
+		
+		if(inpt_ssid == ""){
+			alert("SSID不能为空。");
+			return false;
+		}
+		var password = $("input[name='key']").val();
+
+		var request_date = $("#form1").serializeArray();
+		if (inpt_encryption == "none" && inpt_encryption == "open"){
+			request_date['key'] == ""
+		}
+
+		$.ajax({
+		  url: "<%=luci.dispatcher.build_url("zeroplus", "mode", "set_ap")%>",
+		  cache: false,
+		  dataType: "json",
+		  timeout: 6000,
+		  type: 'POST',
+		  data: request_date,
+		  success: function(rsp,item) 
+			{
+				if(rsp.code == 0){
+					//setTimeout("location.reload();", 8000);
+					alert("保存成功,请重新连接无线网络。");
+				} else {
+					alert("保存失败。  "+rsp.msg);
+					location.reload();
+				}
+			},
+		  error: function(x, t, m)
+			{
+ 
+			}
+		});
+	});
+
+	})
+
+	function get_local_ssid(){
+		var last_dev = '<%=wifi_device%>';
+		var request_date = {"device":last_dev};
+		$.getJSON("<%=luci.dispatcher.build_url("zeroplus", "mode", "view_detail")%>",request_date,function(rsp) 
+		{  
+			if(rsp.code == 0){
+				$("#ssid").val(rsp.ssid);
+				$("#encryption").val(rsp.encryption);
+				$("#key").val(rsp.wifi_key);
+				$("#channel").val(rsp.channel);
+			}
+			else
+			{
+				alert("获取当前配置信息失败。  "+rsp.msg);
+			}
+		});
+	}
+	
+	
+	
+
+</script>
+<%+footer%>
