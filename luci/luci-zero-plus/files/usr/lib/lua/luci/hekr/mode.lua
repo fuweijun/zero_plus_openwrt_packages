@@ -74,6 +74,7 @@ end
 function get_ifname()
 	return luci.util.trim(luci.util.exec("uci get wireless.@wifi-iface[0].device"))
 end
+
 -- 获取AP列表
 function get_aplist()
 	--local http = require "luci.http"	
@@ -85,11 +86,47 @@ function get_aplist()
 	local ifname = get_ifname()	
 	local iw = sys.wifi.getiwinfo("wlan0")	
 	aplist = scanlist(iw,3)	
-	print("Content-Type: text/json\n")	
-	print_json(aplist)
+	print("Content-Type: text/json\n")
+	pirnt_json_aplists(aplist)
+--	print_json(aplist)
 end
 
- 
+function pirnt_json_aplists(x)
+	local auth_suites=''
+	if x == nil then
+		return x
+	elseif type(x) == "table" then
+		print("[")
+		local k, v		
+		for k, v in pairs(x) do
+			if type(v) == "table" then
+				print("{")
+				print('"ssid":"'..v.ssid..'",')
+				print('"bssid":"'..v.bssid..'",')
+				print('"signal":'..v.signal..',')
+				print('"channel":'..v.channel..',')					
+				--auth_suites 
+				if v.encryption.wep == true then
+					auth_suites= "wep"
+				elseif( v.encryption.wpa > 1) then
+					auth_suites= "psk2"		
+				elseif( v.encryption.wpa > 0) then	
+					auth_suites= "psk"		
+				elseif(v.encryption.enabled) then
+					auth_suites= "unknown"		
+				else
+					auth_suites= "open"		
+				end
+				print('"auth_suites":"'..auth_suites..'"')	
+				print("}")
+				if next(x, k) then
+					print(", ")
+				end
+			end
+		end
+		print("]")
+	end
+end
 
 -- Limited source to avoid endless blocking
 local function limitsource(handle, limit)
