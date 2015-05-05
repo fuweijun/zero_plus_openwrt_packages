@@ -3,8 +3,16 @@ api for app set ap_mode
 
 /t/get_aplist
 
+/t/get_apinfo
+
 /t/set_bridge
 param:ssid  key  encryption  bssid  channel
+
+/t/set_ap
+param: ssid=hekr_xxxx&key=12345678&encryption=psk2&channel=11
+
+/t/set_ak
+param: ak=xxxxx
 
 ]]--
 require ("luci")
@@ -167,6 +175,23 @@ function set_bridge()
 	local codeResp = 0
 	local msgResp = "OK"
 	local arr_out_put={}
+	
+	--[[ 0:无密码
+1:wep
+2:wpa
+3:eap
+]]--
+	if (encryptionReq == "0") then
+		encryptionReq="open"
+		elseif (encryptionReq =="1" ) then
+			encryptionReq="wep"
+		elseif (encryptionReq =="2" ) then	
+			encryptionReq="psk2"
+		elseif (encryptionReq =="3" ) then	
+			encryptionReq="eap"
+		else
+			codeResp = 402		
+	end
  
 	if(encryptionReq == "open")then
 		keyReq = ""
@@ -266,6 +291,164 @@ function set_bridge()
 	end	
 end
 
+
+--view detail get_apinfo
+function get_apinfo()
+	local http = require "luci.http"
+	local ssidResp
+	local modeResp
+	local encryptionResp
+	local wifi_keyResp
+	local speedResp
+	local hiddenResp
+	local channelResp
+	local codeResp = 0
+	local msgResp = ""
+	local arr_out_put={}
+	local uptime = luci.sys.uptime()
+	print("Content-Type: text/json; charset=UTF-8\n") 
+	ssidResp = luci.util.trim(luci.sys.exec("uci get wireless.@wifi-iface[0].ssid"))
+	modeResp = luci.util.trim(luci.sys.exec("uci get wireless.@wifi-iface[0].mode"))
+	encryptionResp = luci.util.trim(luci.sys.exec("uci get wireless.@wifi-iface[0].encryption"))	
+	wifi_keyResp = luci.util.trim(luci.sys.exec("uci get wireless.@wifi-iface[0].key"))
+	channelResp = luci.util.trim(luci.sys.exec("uci get wireless.@wifi-device[0].channel"))
+	hiddenResp=0	
+	if (codeResp == 0) then
+		arr_out_put["ssid"] = ssidResp
+		arr_out_put["mode"] = modeResp
+		arr_out_put["encryption"] = encryptionResp
+		arr_out_put["wifi_key"] = wifi_keyResp
+		arr_out_put["channel"] = channelResp
+		arr_out_put["hidden"] = hiddenResp
+		arr_out_put["uptime"] = uptime
+	else
+		msgResp = luci.util.get_api_error(codeResp)
+	end
+	arr_out_put["code"] = codeResp
+	arr_out_put["msg"] = msgResp
+	print_json(arr_out_put,true)
+end
+
+-- 设置云端accesskey
+function set_ak()
+--/t/set_ak?ak=xxxxxxxx 
+	local util = require "luci.util"
+	local http = require "luci.http"
+	http.context.request = luci.http.Request(
+		luci.sys.getenv(),
+		limitsource(io.stdin, tonumber(luci.sys.getenv("CONTENT_LENGTH"))),
+		ltn12.sink.file(io.stderr)
+	)
+	local codeResp = 0
+	local msgResp = ""
+	local arr_out_put={}
+	local ak = luci.http.formvalue("ak")	
+	if ak == nil then --todo 合法性检测
+		codeResp = 20
+	else
+		--luci.sys.exec("uci add ak xxxxx")
+		luci.sys.exec("echo %s > /etc/config/ak" % ak)
+	end
+	msgResp = get_api_error(codeResp)
+	arr_out_put["code"] = codeResp
+	arr_out_put["msg"] = msgResp	
+	print("Content-Type: text/json; charset=UTF-8\n") 
+	print_json(arr_out_put)
+end
+
+
+
+--设置ap信息
+--	/t/set_ap?ssid=hekr_xxxx&key=12345678&encryption=psk2&channel=11
+function set_ap()
+	local util = require "luci.util"
+	local http = require "luci.http"
+	http.context.request = luci.http.Request(
+		luci.sys.getenv(),
+		limitsource(io.stdin, tonumber(luci.sys.getenv("CONTENT_LENGTH"))),
+		ltn12.sink.file(io.stderr)
+	)	
+
+	local ssidReq = luci.http.formvalue("ssid")
+	local keyReq = luci.http.formvalue("key")
+	local encryptionReq = luci.http.formvalue("encryption")
+	local channelReq = luci.http.formvalue("channel")	
+	local codeResp = 0
+	local msgResp = "OK"
+	local arr_out_put={}
+	print("Content-Type: text/json; charset=UTF-8\n") 
+ 
+	if(encryptionReq == "open")then
+		keyReq = ""
+	end
+	
+	if (ssidReq == nil or ssidReq == "") then
+		codeResp = 311
+		elseif (ssidReq:len()>32) then
+			codeResp = 312
+		
+	end
+	if (ssidReq == nil or ssidReq == "") and (encryptionReq == nil or encryptionReq == "") and (keyReq == nil or keyReq == "") then
+		codeResp = 310
+	end
+	if encryptionReq ~= nil and encryptionReq ~= "open" and encryptionReq ~= "mixed-psk" and encryptionReq ~= "mixed-psk-tkip" and encryptionReq ~= "psk" and encryptionReq ~= "psk-tkip" and encryptionReq ~= "psk2" and encryptionReq ~= "psk2-tkip" and encryptionReq ~= "wep" and encryptionReq ~= "wep-open" and encryptionReq ~= "wep-share" then
+		codeResp = 402
+	end
+	if encryptionReq ~= nil then
+		if encryptionReq == "psk" or encryptionReq == "psk-tkip" or encryptionReq == "psk2" or encryptionReq == "psk2-tkip"then
+			if  keyReq:len()<8 then
+				codeResp = 403
+			end
+		elseif encryptionReq == "mixed-psk" or encryptionReq == "mixed-psk-tkip" then
+			if  keyReq:len()<8 or keyReq:len()>63 then
+				codeResp = 405
+			end
+		elseif encryptionReq == "wep" or encryptionReq == "wep-open" or encryptionReq == "wep-share" then
+			if  keyReq:len()~=5 and keyReq:len()~=13 then
+				codeResp = 404
+			end
+		end
+	end
+	if(keyReq == nil or keyReq == "") then
+		odeResp = 406
+		elseif keyReq:len()>0 and encryptionReq == "open" then
+			codeResp = 406		
+	end
+	if not tonumber(channelReq) or tonumber(channelReq)<0 and tonumber(channelReq)>13 then
+		codeResp = 523
+	end
+	
+	--open 修改为 none
+	if(encryptionReq == "open")then
+		encryptionReq = "none"
+	end
+
+	if codeResp == 0 then
+
+		arr_out_put["code"] = codeResp
+		arr_out_put["msg"] = msgResp
+		print_json(arr_out_put)
+		luci.sys.exec("sleep 1")
+		--set wireless interface
+		luci.sys.call("uci set wireless.@wifi-device[0].channel='%s'" % channelReq)
+		luci.sys.call("uci set wireless.@wifi-iface[0].network='lan'")
+		luci.sys.call("uci set wireless.@wifi-iface[0].mode='ap'")
+		luci.sys.call("uci set wireless.@wifi-iface[0].device='radio0'")
+		luci.sys.call("uci set wireless.@wifi-iface[0].ssid='%s'" % ssidReq)
+		luci.sys.call("uci set wireless.@wifi-iface[0].encryption='%s'" % encryptionReq)
+		luci.sys.call("uci set wireless.@wifi-iface[0].key='%s'" % keyReq)
+		luci.sys.call("uci commit wireless")		
+		luci.sys.call("wifi")
+	else
+		msgResp = get_api_error(codeResp)
+		arr_out_put["code"] = codeResp
+		arr_out_put["msg"] = msgResp
+		print_json(arr_out_put)
+	end	
+	
+	
+
+end
 
 
 function get_api_error(errorcode)
